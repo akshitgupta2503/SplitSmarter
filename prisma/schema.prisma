@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  email     String?
+  createdAt DateTime @default(now())
+  
+  paidExpenses     Expense[]      @relation("PaidBy")
+  splits           ExpenseSplit[]
+  paymentsMade     Payment[]      @relation("Payer")
+  paymentsReceived Payment[]      @relation("Payee")
+  groupMemberships GroupMember[]
+}
+
+model Group {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  
+  members   GroupMember[]
+  expenses  Expense[]
+}
+
+model GroupMember {
+  id        String    @id @default(uuid())
+  userId    String
+  groupId   String
+  joinedAt  DateTime
+  leftAt    DateTime? // Null if currently in group
+  
+  user      User      @relation(fields: [userId], references: [id])
+  group     Group     @relation(fields: [groupId], references: [id])
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  groupId     String
+  description String
+  amount      Float
+  currency    String   @default("INR")
+  date        DateTime
+  paidById    String?
+  splitType   String
+  notes       String?
+  isIgnored   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  group       Group          @relation(fields: [groupId], references: [id])
+  paidBy      User?          @relation("PaidBy", fields: [paidById], references: [id])
+  splits      ExpenseSplit[]
+}
+
+model ExpenseSplit {
+  id          String   @id @default(uuid())
+  expenseId   String
+  userId      String
+  amount      Float
+  
+  expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Payment {
+  id          String   @id @default(uuid())
+  payerId     String
+  payeeId     String
+  amount      Float
+  currency    String   @default("INR")
+  date        DateTime
+  notes       String?
+  
+  payer       User     @relation("Payer", fields: [payerId], references: [id])
+  payee       User     @relation("Payee", fields: [payeeId], references: [id])
+}

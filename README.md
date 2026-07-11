@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Shared Expenses App
 
-## Getting Started
+This is a prototype shared expenses web application built to fulfill the requirements of the product engineering assessment.
 
-First, run the development server:
+## Key Features
+- **Intelligent CSV Ingestion**: Imports a deliberately messy CSV file, automatically handling 12 distinct types of data anomalies (duplicates, conflicting splits, move-ins/move-outs, currency conversion, bad dates, and more) according to strict business logic.
+- **Group Dashboards**: View net balances for the group, showing exactly who owes whom, minimized through a greedy settlement algorithm.
+- **Individual Breakdown**: Click on any user to see a transparent ledger of every expense they paid and every shared cost they are responsible for (No "magic numbers").
+- **Import Report**: A transparency log generated immediately after ingestion, detailing exactly what anomalies were found in the CSV and what actions the parser took to correct them.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Technology Stack
+- Next.js (App Router, Server Components, Server Actions)
+- Tailwind CSS & shadcn/ui
+- Prisma ORM & SQLite (Zero-config relational database)
+- Papaparse & date-fns
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Setup Instructions
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Prerequisites**: Node.js v18+ installed.
+2. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+3. **Database Setup**:
+   The app uses a local SQLite database (`dev.db`). Initialize it by running:
+   ```bash
+   npx prisma migrate dev --name init
+   ```
+   (Alternatively, run `npx prisma db push` if you have issues with migrations).
+4. **Run the Development Server**:
+   ```bash
+   npm run dev
+   ```
+5. **Usage**:
+   - Navigate to `http://localhost:3000`.
+   - Click "Choose File" and upload the provided `expenses_export.csv`.
+   - Wait for the import to complete. You will be redirected to the Group Dashboard.
+   - Click on "View Import Report" to see how the data anomalies were handled.
+   - Click on individual names to see their exact balance breakdown.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## AI Usage & Decisions
+Please review `AI_USAGE.md` for details on how AI was utilized during development, and `DECISIONS.md` for a log of significant engineering and product choices. The exact anomaly handling logic and database schema are documented in `SCOPE.md`.
