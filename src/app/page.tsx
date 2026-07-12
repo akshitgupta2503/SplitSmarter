@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -9,9 +9,25 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [user, setUser] = useState<{name: string, email: string} | null>(null);
   const router = useRouter();
 
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setUser(data.user);
+        }
+      })
+      .catch(err => console.error("Not logged in"));
+  }, []);
+
   const handleImport = async () => {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
     if (!file) return;
     setLoading(true);
     const formData = new FormData();
@@ -49,9 +65,15 @@ export default function Home() {
         </div>
         <div className="flex items-center space-x-6">
           <Link href="/groups" className="text-zinc-400 font-medium hover:text-white transition-colors">Go to Dashboard</Link>
-          <Link href="/login" className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-semibold backdrop-blur-md transition-all">
-            Sign In
-          </Link>
+          {user ? (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+          ) : (
+            <Link href="/login" className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-semibold backdrop-blur-md transition-all">
+              Sign In
+            </Link>
+          )}
         </div>
       </header>
 

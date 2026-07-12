@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { PrismaClient } from "@prisma/client";
 import { processCSV } from "@/lib/importer";
 
@@ -6,6 +7,11 @@ const prisma = new PrismaClient();
 
 export async function POST(req: Request) {
   try {
+    const userId = (await cookies()).get("userId")?.value;
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const data = await req.formData();
     const file: File | null = data.get("file") as unknown as File;
 
