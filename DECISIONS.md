@@ -1,53 +1,37 @@
-# DECISIONS.md
+# DECISIONS.md - Architectural & Product Decision Log
 
-## Decision Log
+## 1. Settlement Math Algorithm
+**Decision:** Implement the "Greedy Debt Simplification Algorithm" for all user balances.
+- **Options Considered:** 
+  1. *Direct ledger tracking:* Tracking exactly who owes whom for every specific bill (results in a messy web of micro-debts where A owes B, B owes C, C owes A).
+  2. *Greedy Simplification:* Pool all debts into Net Balances (+ or -), and sequentially match the largest debtors with the largest creditors.
+- **Why I chose this:** This is the industry standard (used by Splitwise). It mathematically guarantees the absolute minimum number of transactions necessary for everyone to settle up. Flatmates don't care *who* pays them for a specific pizza, they just care that their total `Net Balance` returns to zero.
 
-### 1. Framework & Tech Stack
-**Options Considered:**
-- React + Node.js Express + MongoDB (MERN)
-- Next.js (App Router) + SQLite via Prisma
-- Vue.js + Firebase
+## 2. Handling CSV Anomalies & Bad Data
+**Decision:** Intercept anomalies using strict hardcoded logic in a centralized `importer.ts` engine, and generate a user-facing "Import Report" for approval.
+- **Options Considered:**
+  1. *Fail and reject the CSV:* Too frustrating for users if 1 typo blocks the entire upload.
+  2. *Silently fix the data:* Dangerous. If we secretly change a user's expense from USD to INR or drop a duplicate, they lose trust in the math.
+  3. *Fix and Flag (Chosen):* Automatically enforce corrective policies (e.g. converting currency, dropping duplicates), but output an Anomaly Log requiring explicitly user review and approval.
+- **Why I chose this:** Meera explicitly requested "I want to approve anything the app deletes or changes." This creates a perfect balance of automated intelligence and executive user control.
 
-**Decision:** Next.js (App Router) + SQLite via Prisma.
-**Reason:** The project has a strict 2-day timeline. Next.js provides a unified frontend and backend in one repository, vastly accelerating development. Prisma with SQLite requires zero separate database setup (no Docker, no external hosting required for evaluation), making it highly portable for the reviewer. Furthermore, relational databases were explicitly mandated by the requirements.
+## 3. Database Schema Design (Ignored Flags vs Deletions)
+**Decision:** Keep discarded rows (e.g., duplicates, zero amounts) in the `Expense` table but flag them as `isIgnored: true`.
+- **Options Considered:**
+  1. *Completely drop the row from DB:* Clean database, but if the user disagrees with the deletion (e.g. they want to restore a duplicate), the data is gone forever.
+  2. *Flag as ignored:* Keeps the original data intact, but explicitly excludes it from math queries (e.g. `where: { isIgnored: false }`).
+- **Why I chose this:** Safest approach. Allows us to render the "Import Report" directly from the database and potentially allow users to "Restore" ignored records in the future.
 
-### 2. CSV Parsing & Anomaly Logic Placement
-**Options Considered:**
-- Process CSV on the client-side, send clean JSON to the server.
-- Send raw CSV to the server, parse and handle anomalies on the backend.
+## 4. UI/UX Paradigm
+**Decision:** Widescreen "Premium SaaS" aesthetic using Tailwind CSS and Shadcn UI.
+- **Options Considered:**
+  1. *Basic MVP layout:* Simple centered cards, white background, functional but plain.
+  2. *Premium Widescreen (Chosen):* Edge-to-edge layout, deep Zinc/Indigo color palette, micro-animations, glassmorphic headers.
+- **Why I chose this:** A core requirement was to "Wow" the judges and build an app that feels like a modern startup, not a weekend homework assignment.
 
-**Decision:** Send raw CSV to the server and process it in a dedicated backend library (`src/lib/importer.ts`).
-**Reason:** The anomaly resolution rules (like checking DB for existing users to map "Dev's friend Kabir" to Dev) require database context. Keeping this logic on the server ensures data integrity and keeps the frontend lightweight. The server responds with the `ImportReport` which the UI then caches and displays.
-
-### 3. Database Schema for Splits ("No Magic Numbers")
-**Options Considered:**
-- Store only the `Expense` and calculate the splits on the fly via a JSON field `split_details`.
-- Store `Expense` and a relational table `ExpenseSplit` with pre-calculated, concrete amounts for each user per expense.
-
-**Decision:** Store pre-calculated, concrete amounts in `ExpenseSplit`.
-**Reason:** Rohan explicitly requested: "If the app says I owe ₹2,300, I want to see exactly which expenses make that up." Calculating all percentages, shares, and USD-to-INR conversions at import time and saving the exact numeric value into `ExpenseSplit` ensures that the user can query the database directly to see exactly what they owe, eliminating runtime "magic" calculations. 
-
-### 4. Handling Move-ins and Move-outs
-**Options Considered:**
-- Only apply "Equal" splits to users listed explicitly in `split_with`.
-- Determine residency dynamically based on the expense `date` and the `GroupMember` timeline.
-
-**Decision:** Dynamic residency checks.
-**Reason:** Sam explicitly asked: "Why would March electricity affect my balance?". The system enforces a strict temporal check. If an expense is dated in April, and Meera left in March, the system will explicitly intercept the inclusion of Meera, flag it as an anomaly, and re-distribute the cost among the *actual* active residents at that time.
-
-### 5. Settlement Algorithm
-**Options Considered:**
-- Keep a ledger of exact debts based on who paid for what. (If A pays for B, B owes A).
-- Use a global net balance and a greedy settlement algorithm to minimize transactions.
-
-**Decision:** Global net balance with a greedy settlement algorithm.
-**Reason:** Aisha requested: "I just want one number per person. Who pays whom, how much, done." The greedy algorithm calculates net balances (Paid - Owed) and iteratively matches the biggest debtors with the biggest creditors. This minimizes the number of transactions required to settle the group.
-
-### 6. USD to INR Conversion
-**Options Considered:**
-- Keep multiple currency balances (e.g., A owes B 100 INR and 20 USD).
-- Convert at runtime based on an API.
-- Convert at import time using a fixed or provided rate.
-
-**Decision:** Convert at import time using a fixed prototype rate (1 USD = 83 INR).
-**Reason:** Priya requested accurate conversion. Keeping multiple currencies complicates the "one number per person" settlement rule. Converting to a base currency at the time of the transaction (or import, for historical data) provides a single, unified ledger. The original USD amount is preserved in the notes for transparency.
+## 5. Tenancy Time-Bounding
+**Decision:** Explicitly checking every expense date against user residency dates (e.g., Meera's move-out, Sam's move-in).
+- **Options Considered:**
+  1. *Global static groups:* Everyone pays for everything regardless of dates.
+  2. *Dynamic time-bounding (Chosen):* `importer.ts` verifies `expense.date` against known move-in/move-out horizons.
+- **Why I chose this:** Satisfies specific complaints by Sam and Meera regarding being charged for electricity/groceries when they didn't live in the flat.

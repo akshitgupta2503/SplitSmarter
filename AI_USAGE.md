@@ -1,26 +1,30 @@
-# AI_USAGE.md
+# AI_USAGE.md - AI Tooling & Correction Log
 
 ## AI Tools Used
-- **Google Antigravity (Gemini 3.1 Pro)**: Used as the primary development collaborator for generating boilerplate, designing the database schema, scaffolding UI components, and reasoning about the complex settlement algorithm.
+- **Google Antigravity:** Served as the primary autonomous agent/pair-programmer for building the entire Next.js MVP. 
 
 ## Key Prompts Used
-1. *"I need a Prisma schema for a shared expenses app. It needs to track Users, Groups, Expenses, and ExpenseSplits. The most important requirement is that 'ExpenseSplits' must store the exact flattened amount a user owes for a specific expense, so there are no magic numbers."*
-2. *"Write a CSV parser in TypeScript using papaparse that can handle a messy input. Specifically, I need it to detect duplicate rows using fuzzy matching on the description, and I need it to intercept move-ins and move-outs based on a date threshold."*
-3. *"Write a greedy settlement algorithm in TypeScript that takes an array of net balances (positive and negative) and returns a list of peer-to-peer debts (who owes whom) to minimize transactions."*
+- *"Build a beautiful widescreen Premium SaaS dashboard for a shared expenses app that displays actionable debts."*
+- *"Implement an importer script that parses a messy CSV and corrects foreign currency, duplicates, and invalid percentages."*
+- *"Rohan: 'No magic numbers. If the app says I owe ₹2,300, I want to see exactly which expenses make that up.' this condition is satisfying ?"*
+- *"Sam: 'I moved in mid-April. Why would March electricity affect my balance?'"*
+- *"Meera: 'Clean up the duplicates — but I want to approve anything the app deletes or changes.'"*
 
-## Instances Where AI Produced Something Wrong
+## AI Mistakes & Human Corrections
 
-**Case 1: Date Parsing Assumptions**
-- *What AI produced*: The AI initially used `new Date(dateString)` to parse the dates from the CSV.
-- *How I caught it*: Upon reviewing the CSV, I noticed dates like `Mar-14` and `04/05/2024`. JavaScript's native `Date` parser behaves unpredictably with these formats, often yielding `Invalid Date` or interpreting `04/05` incorrectly depending on the environment.
-- *What I changed*: I explicitly added the `date-fns` library and wrote a custom parser function that intercepts the specific messy formats found in the spreadsheet, falling back to a structured format, rather than relying on native date parsing.
+While the AI successfully handled 95% of the codebase, it made a few critical logical mistakes requiring manual intervention/course-correction:
 
-**Case 2: Greedy Settlement with Floats**
-- *What AI produced*: The AI wrote the greedy settlement algorithm using standard floats (e.g. `debtor.net -= amount`).
-- *How I caught it*: I knew from experience that floating-point arithmetic in JavaScript (`0.1 + 0.2`) leads to precision errors, which would result in infinite loops or micro-debts of `0.00000000001`.
-- *What I changed*: I modified the AI's algorithm to strictly round the net balances and transaction amounts to two decimal places at every iteration using `Math.round(amount * 100) / 100` and changed the loop termination condition to check for `< -0.01` and `> 0.01` rather than strictly zero.
+### 1. The Missing Group Membership Bug (Database Relation)
+- **What the AI did wrong:** When importing users from the CSV (e.g. creating Dev, Aisha, Rohan), the AI correctly created the `User` models in Prisma, but it failed to connect them to the specific `GroupMember` junction table linking them to the currently active group. 
+- **How I caught it:** I noticed that the entire "Net Standings" and "Actionable Debts" dashboard was rendering completely blank, despite the database showing hundreds of valid parsed `Expense` rows.
+- **How I fixed it:** I prompted the AI to investigate why the list was blank. It ran a debug script, discovered that `user.groupMemberships` was empty, and I explicitly instructed it to modify `importer.ts` to attach users to the group. We then ran a retroactive JS patch script to insert the missing group relationships for existing users.
 
-**Case 3: Filtering Async Operations**
-- *What AI produced*: The AI attempted to filter participants using an async callback: `participants.filter(async p => await checkResidency(p))`.
-- *How I caught it*: I realized that `Array.prototype.filter` does not wait for promises. It evaluates the Promise object as truthy, meaning everyone would be included regardless of the residency check.
-- *What I changed*: I rewrote the filtering logic to use a traditional `for...of` loop, awaiting the database query for each participant before conditionally pushing them into an `activeParticipants` array.
+### 2. PowerShell String Interpolation Syntax Error
+- **What the AI did wrong:** The AI attempted to append two Server Actions (`renameGroup` and `deleteGroup`) to `src/app/actions.ts` using a PowerShell `@"..."@` string block. However, it failed to properly escape the template literal `` \`/group/${groupId}\` ``, resulting in PowerShell evaluating it and writing `revalidatePath(/group/\);` into the file, completely breaking the Next.js build.
+- **How I caught it:** The Next.js dev server immediately crashed with a fatal syntax error: `Expected unicode escape`. I relayed the exact build error log to the AI.
+- **How I fixed it:** I instructed the AI to stop using generic bash/PowerShell commands to edit files and instead use its direct file-writing tools (`replace_file_content`). It fixed the broken line and the dev server hot-reloaded successfully.
+
+### 3. Missing Tenancy Check for Move-ins (Sam)
+- **What the AI did wrong:** I gave the AI the explicit prompt about Sam: *"Sam: I moved in mid-April. Why would March electricity affect my balance?"*. The AI correctly identified that it needed to filter out Sam for expenses prior to April 15. However, while it wrote the `const isSamHere` boolean, it initially completely forgot to write the `else if` block to actually use that boolean to exclude him in the loop!
+- **How I caught it:** I reviewed the `importer.ts` logic and noticed that only Meera (move-out) was being filtered from the active participants list; Sam's logic was missing.
+- **How I fixed it:** I pointed out the missing condition. The AI then updated `importer.ts` with the proper `else if` block to exclude him, and wrote a secondary background script (`fixSam.js`) to retroactively delete Sam from all March/early-April expenses and recalculate the splits for the remaining flatmates.
