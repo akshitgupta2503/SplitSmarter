@@ -4,12 +4,14 @@ generator client {
 
 datasource db {
   provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
   id        String   @id @default(uuid())
   name      String   @unique
-  email     String?
+  email     String?  @unique
+  password  String?
   createdAt DateTime @default(now())
   
   paidExpenses     Expense[]      @relation("PaidBy")
