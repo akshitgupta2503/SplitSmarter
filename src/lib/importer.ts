@@ -81,6 +81,7 @@ export async function processCSV(csvContent: string, groupId: string) {
   
   // Track users in memory
   const usersMap = new Map<string, string>(); // name -> id
+  const idToNameMap = new Map<string, string>(); // id -> name
   const getOrCreateUser = async (name: string) => {
     const norm = normalizeName(name);
     if (!norm) return null;
@@ -119,6 +120,7 @@ export async function processCSV(csvContent: string, groupId: string) {
     }
 
     usersMap.set(norm, user.id);
+    idToNameMap.set(user.id, norm);
     return user.id;
   };
 
@@ -321,15 +323,15 @@ export async function processCSV(csvContent: string, groupId: string) {
     // Actually, filter with async is bad.
     const activePIds: string[] = [];
     for (const pId of participants) {
-       const u = await prisma.user.findUnique({where: {id: pId}});
-       if (u?.name === "Meera" && isMeeraGone) {
+       const uName = idToNameMap.get(pId);
+       if (uName === "Meera" && isMeeraGone) {
          anomalies.push({
           row: rowNum,
           description: desc,
           issue: "Participant included after moving out (Meera)",
           actionTaken: "Excluded Meera from the expense and re-split."
         });
-       } else if (u?.name === "Sam" && !isSamHere) {
+       } else if (uName === "Sam" && !isSamHere) {
          anomalies.push({
           row: rowNum,
           description: desc,
