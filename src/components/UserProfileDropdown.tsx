@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function UserProfileDropdown({ user }: { user: { name: string, email: string } | null }) {
+export function UserProfileDropdown({ user }: { user: { name: string, email: string | null } | null }) {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
 

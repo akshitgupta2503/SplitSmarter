@@ -63,7 +63,11 @@ export default function Login() {
       </div>
 
       {/* Right Side - Form */}
-      <div className="flex items-center justify-center p-8 md:p-12">
+      <div className="flex items-center justify-center p-8 md:p-12 relative">
+        <Link href="/" className="absolute top-8 right-8 px-5 py-2.5 bg-white hover:bg-zinc-50 border-2 border-zinc-200 hover:border-indigo-300 hover:text-indigo-600 text-zinc-600 rounded-xl font-bold transition-all flex items-center shadow-sm text-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          Home
+        </Link>
         <div className="w-full max-w-[420px] space-y-10">
           <div className="space-y-3">
             <h2 className="text-4xl font-black text-zinc-900 tracking-tight">Welcome back</h2>
