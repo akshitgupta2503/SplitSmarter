@@ -13,7 +13,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "No file provided" }, { status: 400 });
     }
 
-    const text = await file.text();
+    let text = "";
+    if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+      const arrayBuffer = await file.arrayBuffer();
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.read(arrayBuffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      text = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
+    } else {
+      text = await file.text();
+    }
     
     // Create a group for this import session
     const group = await prisma.group.create({

@@ -100,7 +100,14 @@ export async function processCSV(csvContent: string, groupId: string) {
     let user = await prisma.user.findUnique({ where: { name: norm } });
     if (!user) {
       user = await prisma.user.create({ data: { name: norm } });
-      // Add to group (we can assume everyone is in the group for simplicity, or manage joins/leaves)
+    }
+    
+    // Ensure they are a member of this specific group
+    const existingMember = await prisma.groupMember.findFirst({
+      where: { userId: user.id, groupId: groupId }
+    });
+
+    if (!existingMember) {
       await prisma.groupMember.create({
         data: {
           userId: user.id,
@@ -109,6 +116,7 @@ export async function processCSV(csvContent: string, groupId: string) {
         }
       });
     }
+
     usersMap.set(norm, user.id);
     return user.id;
   };
@@ -169,43 +177,32 @@ export async function processCSV(csvContent: string, groupId: string) {
       continue;
     }
 
-    // 3. Duplicates
+    // 3. Duplicates & Conflicts (Same dinner, different amounts/payers)
     let amount = normalizeAmount(amountRaw);
     if (amountRaw && amountRaw.includes(",")) {
-      anomalies.push({
-         row: rowNum,
-         description: desc,
-         issue: `Number formatting issue: ${amountRaw}`,
-         actionTaken: `Stripped commas and parsed as ${amount}`
-      });
+      anomalies.push({ row: rowNum, description: desc, issue: `Number formatting issue: ${amountRaw}`, actionTaken: `Stripped commas and parsed as ${amount}` });
     }
     if (amountRaw === "899.995") {
-      anomalies.push({
-         row: rowNum,
-         description: desc,
-         issue: `Precision issue: ${amountRaw}`,
-         actionTaken: `Rounded to 2 decimal places: ${amount}`
-      });
+      anomalies.push({ row: rowNum, description: desc, issue: `Precision issue: ${amountRaw}`, actionTaken: `Rounded to 2 decimal places: ${amount}` });
     }
 
     const dateStrNorm = parseDateStr(dateRaw, rowNum, anomalies).toISOString().split('T')[0];
-    const dupKey = `${payerId}-${amount}-${dateStrNorm}`;
+    const simpleDesc = desc.toLowerCase().replace(/[^a-z0-9]/g, '');
+    // Key based purely on Date and Event description
+    const conflictKey = `${dateStrNorm}-${simpleDesc}`;
+    
     let isIgnored = false;
 
-    // We do fuzzy match for desc for duplicates, e.g., "Dinner at Marina Bites" vs "dinner - marina bites"
-    const simpleDesc = desc.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const fullDupKey = `${dupKey}-${simpleDesc}`;
-
-    if (seenExpenses.has(fullDupKey)) {
+    if (seenExpenses.has(conflictKey)) {
       anomalies.push({
         row: rowNum,
         description: desc,
-        issue: "Duplicate entry detected",
-        actionTaken: "Flagged as ignored and excluded from balances."
+        issue: "Conflict/Duplicate: Same event logged multiple times (potentially with different amounts/payers)",
+        actionTaken: "Policy: First chronological row wins. This duplicate row is ignored."
       });
       isIgnored = true;
     } else {
-      seenExpenses.add(fullDupKey);
+      seenExpenses.add(conflictKey);
     }
 
     // 4. Missing Currency
@@ -328,6 +325,13 @@ export async function processCSV(csvContent: string, groupId: string) {
           issue: "Participant included after moving out (Meera)",
           actionTaken: "Excluded Meera from the expense and re-split."
         });
+       } else if (u?.name === "Sam" && !isSamHere) {
+         anomalies.push({
+          row: rowNum,
+          description: desc,
+          issue: "Participant included before moving in (Sam)",
+          actionTaken: "Excluded Sam from the expense and re-split."
+        });
        } else {
          activePIds.push(pId);
        }
@@ -349,7 +353,7 @@ export async function processCSV(csvContent: string, groupId: string) {
       }
     } else if (finalSplitType === "PERCENTAGE" && splitDetailsRaw) {
       // 9. Invalid Percentages
-      const parts = splitDetailsRaw.split(";").map(s => s.trim());
+      const parts = splitDetailsRaw.split(";").map((s: string) => s.trim());
       let totalPerc = 0;
       const userPercents: {id: string, perc: number}[] = [];
       for (const part of parts) {
@@ -392,7 +396,7 @@ export async function processCSV(csvContent: string, groupId: string) {
       }
     } else if ((finalSplitType === "SHARE" || finalSplitType === "UNEQUAL") && splitDetailsRaw) {
        // "Aisha 1; Rohan 2" or exact amounts "Rohan 700; Priya 400; Meera 400"
-       const parts = splitDetailsRaw.split(";").map(s => s.trim());
+       const parts = splitDetailsRaw.split(";").map((s: string) => s.trim());
        let totalSharesOrAmount = 0;
        const userVals: {id: string, val: number}[] = [];
        for (const part of parts) {
