@@ -5,12 +5,20 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { AddExpenseDialog } from "@/components/AddExpenseDialog";
 import { SettleDebtDialog } from "@/components/SettleDebtDialog";
+import { UserProfileDropdown } from "@/components/UserProfileDropdown";
+import { cookies } from "next/headers";
 
 const prisma = new PrismaClient();
 
 export default async function GroupDashboard(props: { params: Promise<{ groupId: string }> }) {
   const params = await props.params;
   const groupId = params.groupId;
+
+  const userId = (await cookies()).get("userId")?.value;
+  let loggedInUser = null;
+  if (userId) {
+    loggedInUser = await prisma.user.findUnique({ where: { id: userId } });
+  }
 
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -79,6 +87,9 @@ export default async function GroupDashboard(props: { params: Promise<{ groupId:
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             Settings
           </Link>
+          <div className="pl-2 border-l border-zinc-200">
+            <UserProfileDropdown user={loggedInUser} />
+          </div>
         </div>
       </header>
 
