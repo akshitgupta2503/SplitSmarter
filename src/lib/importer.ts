@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import Papa from "papaparse";
 import { PrismaClient } from "@prisma/client";
 import { parse, isValid } from "date-fns";
@@ -123,6 +124,10 @@ export async function processCSV(csvContent: string, groupId: string) {
 
   // Keep track of duplicates
   const seenExpenses = new Set<string>();
+  
+  const expensesToInsert: any[] = [];
+  const splitsToInsert: any[] = [];
+  const paymentsToInsert: any[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const rowNum = i + 2; // +1 for header, +1 for 0-index
@@ -163,16 +168,14 @@ export async function processCSV(csvContent: string, groupId: string) {
       
       const payeeId = await getOrCreateUser(splitWithRaw || "Unknown");
       if (payeeId) {
-        await prisma.payment.create({
-          data: {
+        paymentsToInsert.push({
             payerId: payerId,
             payeeId: payeeId,
             amount: normalizeAmount(amountRaw),
             currency: currencyRaw || "INR",
             date: parseDateStr(dateRaw, rowNum, anomalies),
             notes: notesRaw
-          }
-        });
+          });
       }
       continue;
     }
@@ -266,8 +269,9 @@ export async function processCSV(csvContent: string, groupId: string) {
     }
 
     // Create Expense
-    const expense = await prisma.expense.create({
-      data: {
+    const expense = {
+      id: crypto.randomUUID(),
+
         groupId,
         description: desc || "Unnamed Expense",
         amount: baseAmount, // Store converted amount for standardisation!
@@ -277,8 +281,8 @@ export async function processCSV(csvContent: string, groupId: string) {
         splitType: finalSplitType,
         notes: currencyRaw === "USD" ? `Original: ${amount} USD. ${notesRaw || ''}` : notesRaw,
         isIgnored: isIgnored
-      }
-    });
+    };
+    expensesToInsert.push(expense);
 
     if (isIgnored) continue;
 
@@ -343,13 +347,11 @@ export async function processCSV(csvContent: string, groupId: string) {
     if (finalSplitType === "EQUAL") {
       const splitAmount = Math.round((baseAmount / participantsToUse.length) * 100) / 100;
       for (const pId of participantsToUse) {
-        await prisma.expenseSplit.create({
-          data: {
+        splitsToInsert.push({
             expenseId: expense.id,
             userId: pId,
             amount: splitAmount
-          }
-        });
+          });
       }
     } else if (finalSplitType === "PERCENTAGE" && splitDetailsRaw) {
       // 9. Invalid Percentages
@@ -386,13 +388,11 @@ export async function processCSV(csvContent: string, groupId: string) {
           finalPerc = (up.perc / totalPerc) * 100;
         }
         const splitAmount = Math.round((baseAmount * (finalPerc / 100)) * 100) / 100;
-        await prisma.expenseSplit.create({
-          data: {
+        splitsToInsert.push({
             expenseId: expense.id,
             userId: up.id,
             amount: splitAmount
-          }
-        });
+          });
       }
     } else if ((finalSplitType === "SHARE" || finalSplitType === "UNEQUAL") && splitDetailsRaw) {
        // "Aisha 1; Rohan 2" or exact amounts "Rohan 700; Priya 400; Meera 400"
@@ -415,13 +415,11 @@ export async function processCSV(csvContent: string, groupId: string) {
        if (finalSplitType === "SHARE") {
          for (const uv of userVals) {
             const splitAmount = Math.round((baseAmount * (uv.val / totalSharesOrAmount)) * 100) / 100;
-            await prisma.expenseSplit.create({
-              data: {
+            splitsToInsert.push({
                 expenseId: expense.id,
                 userId: uv.id,
                 amount: splitAmount
-              }
-            });
+              });
          }
        } else { // UNEQUAL EXACT
          if (Math.abs(totalSharesOrAmount - baseAmount) > 1) { // allow 1 INR diff for rounding
@@ -433,20 +431,28 @@ export async function processCSV(csvContent: string, groupId: string) {
            });
            for (const uv of userVals) {
              const splitAmount = Math.round((baseAmount * (uv.val / totalSharesOrAmount)) * 100) / 100;
-             await prisma.expenseSplit.create({
-                data: { expenseId: expense.id, userId: uv.id, amount: splitAmount }
-             });
+             splitsToInsert.push({ expenseId: expense.id, userId: uv.id, amount: splitAmount });
            }
          } else {
            for (const uv of userVals) {
-             await prisma.expenseSplit.create({
-                data: { expenseId: expense.id, userId: uv.id, amount: uv.val }
-             });
+             splitsToInsert.push({ expenseId: expense.id, userId: uv.id, amount: uv.val });
            }
          }
        }
     }
   }
 
+  
+  // BULK INSERT
+  if (paymentsToInsert.length > 0) {
+    await prisma.payment.createMany({ data: paymentsToInsert });
+  }
+  if (expensesToInsert.length > 0) {
+    await prisma.expense.createMany({ data: expensesToInsert });
+  }
+  if (splitsToInsert.length > 0) {
+    await prisma.expenseSplit.createMany({ data: splitsToInsert });
+  }
+  
   return { anomalies, success: true };
 }
