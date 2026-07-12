@@ -49,7 +49,7 @@ A meticulously crafted UI leveraging Tailwind CSS, `shadcn/ui`, and a modern dar
    ```
 
 4. **Access the App**
-   Open [http://localhost:3000](http://localhost:3000) in your browser. You can login by selecting any of the mock users (e.g., Aisha, Dev, Rohan) to view the system through their perspective.
+   You can login by selecting any of the mock users (e.g., Aisha, Dev, Rohan) to view the system through their perspective.
 
 ## 📁 Repository Structure
 - `/src/app`: Next.js App Router pages (Dashboard, Reports, User Breakdowns).
